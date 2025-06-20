@@ -1,5 +1,6 @@
 import { ImageMerger } from '@/services/ImageMerger';
 import { MergeConfig } from '@/types/image';
+import JSON5 from '@/utils/json5';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -26,11 +27,12 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         
-        // 解析查询参数
+        // 解析查询参数，images 支持 JSON5
         const config: MergeConfig = {
             w: parseInt(searchParams.get('w') || '0'),
             h: parseInt(searchParams.get('h') || '0'),
-            images: JSON.parse(searchParams.get('images') || '[]')
+            images: JSON5.parse(searchParams.get('images') || '[]'),
+            size: searchParams.has('size') ? Number(searchParams.get('size')) : undefined
         };
 
         // 验证配置
