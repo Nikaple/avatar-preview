@@ -42,27 +42,47 @@ export class ImageMerger {
                                 // 拉取失败，跳过该图片
                                 return null;
                             }
-                            const buffer = Buffer.from(await response.arrayBuffer());
+                            let buffer: Buffer<ArrayBufferLike> = Buffer.from(await response.arrayBuffer());
+                            buffer = Buffer.from(buffer);
                             // 获取原始图片的元数据
                             const metadata = await sharp(buffer).metadata();
                             const originalAspectRatio = metadata.width! / metadata.height!;
                             // 计算调整后的高度，保持纵横比
                             const resizeWidth = img.width;
-                            const resizeHeight = Math.round(resizeWidth / originalAspectRatio);
-                            // 确保调整后的尺寸不超过画布
-                            const finalWidth = Math.min(resizeWidth, this.config.w - img.position[0]);
-                            const finalHeight = Math.min(resizeHeight, this.config.h - img.position[1]);
-                            // 调整图片大小
-                            const resizedImage = await sharp(buffer)
+                            const resizeHeight = Math.floor(resizeWidth / originalAspectRatio);
+                            // 先resize
+                            let processedImage = await sharp(buffer)
                                 .resize({
-                                    width: finalWidth,
-                                    height: finalHeight,
+                                    width: resizeWidth,
+                                    height: resizeHeight,
                                     fit: 'contain',
                                     background: { r: 0, g: 0, b: 0, alpha: 0 }
                                 })
                                 .toBuffer();
+                            let offsetLeft = img.position[0];
+                            let offsetTop = img.position[1];
+                            // 再clip（只在resize后切除，不影响缩放和位置）
+                            if (img.clip && img.clip.length === 4) {
+                                const [top, right, bottom, left] = img.clip;
+                                const meta = await sharp(processedImage).metadata();
+                                const width = meta.width ?? 0;
+                                const height = meta.height ?? 0;
+                                processedImage = await sharp(processedImage)
+                                    .extract({
+                                        left: left,
+                                        top: top,
+                                        width: Math.min(width - left - right, width),
+                                        height: Math.min(height - top - bottom, height)
+                                    })
+                                    .toBuffer();
+                                offsetLeft += left;
+                                offsetTop += top;
+                            }
+                            const processedShapeImage = await sharp(processedImage).metadata();
                             return {
-                                input: resizedImage,
+                                input: processedImage,
+                                width: processedShapeImage.width,
+                                height: processedShapeImage.height,
                                 left: img.position[0],
                                 top: img.position[1]
                             };
@@ -81,8 +101,8 @@ export class ImageMerger {
 
             // 如果 size !== 1，则整体缩放
             if (size !== 1) {
-                const scaledWidth = Math.round(this.config.w * size);
-                const scaledHeight = Math.round(this.config.h * size);
+                const scaledWidth = Math.floor(this.config.w * size);
+                const scaledHeight = Math.floor(this.config.h * size);
                 result = await sharp(result)
                     .resize({ width: scaledWidth, height: scaledHeight })
                     .png()
