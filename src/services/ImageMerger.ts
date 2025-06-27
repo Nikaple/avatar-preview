@@ -79,12 +79,27 @@ export class ImageMerger {
                                 offsetTop += top;
                             }
                             const processedShapeImage = await sharp(processedImage).metadata();
+                            if (this.config.debug) {
+                                processedImage = await sharp(processedImage)
+                                    .composite([
+                                        {
+                                            input: Buffer.from(
+                                                `<svg width="${processedShapeImage.width}" height="${processedShapeImage.height}">
+                                                    <rect x="0" y="0" width="${processedShapeImage.width}" height="${processedShapeImage.height}"
+                                                      style="fill:none;stroke:red;stroke-width:5;" />
+                                                </svg>`),
+                                            left: 0,
+                                            top: 0
+                                        }
+                                    ])
+                                    .toBuffer()
+                            }
                             return {
                                 input: processedImage,
                                 width: processedShapeImage.width,
                                 height: processedShapeImage.height,
-                                left: img.position[0],
-                                top: img.position[1]
+                                left: offsetLeft,
+                                top: offsetTop
                             };
                         } catch (e) {
                             // 拉取或处理失败，跳过该图片

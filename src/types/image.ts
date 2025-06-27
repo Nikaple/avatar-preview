@@ -8,6 +8,7 @@ export interface ImageConfig {
 export interface MergeConfig {
     w: number;
     h: number;
+    debug?: boolean;
     images: ImageConfig[];
     size?: number; // 新增，缩放倍数，默认为1
 }

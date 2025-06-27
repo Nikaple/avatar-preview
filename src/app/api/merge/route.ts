@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
             w: parseInt(searchParams.get('w') || '0'),
             h: parseInt(searchParams.get('h') || '0'),
             images: JSON5.parse(searchParams.get('images') || '[]'),
-            size: searchParams.has('size') ? Number(searchParams.get('size')) : undefined
+            size: searchParams.has('size') ? Number(searchParams.get('size')) : undefined,
+            debug: searchParams.has('debug') ? true : false,
         };
 
         // 验证配置
