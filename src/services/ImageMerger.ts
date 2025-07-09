@@ -21,15 +21,6 @@ export class ImageMerger {
         try {
             const fetch = await this.initFetch();
             const size = this.config.size ?? 1;
-            // 创建一个透明背景的画布
-            const canvas = await sharp({
-                create: {
-                    width: this.config.w,
-                    height: this.config.h,
-                    channels: 4,
-                    background: { r: 0, g: 0, b: 0, alpha: 0 }
-                }
-            });
 
             // 下载并处理所有图片
             const compositeOperations = (await Promise.all(
@@ -79,6 +70,21 @@ export class ImageMerger {
                                 offsetTop += top;
                             }
                             const processedShapeImage = await sharp(processedImage).metadata();
+                            // if (processedShapeImage.width > this.config.w) {
+                            //     const cropLeft = img.position[0] < 0 ? -img.position[0] : 0;
+                            //     const cropTop = img.position[1] < 0 ? -img.position[1] : 0;
+                            //     const cropWidth = Math.min(this.config.w, processedShapeImage.width - cropLeft);
+                            //     const cropHeight = Math.min(this.config.h, processedShapeImage.height - cropTop);
+                            //     console.log({ cropLeft, cropTop, cropWidth, cropHeight })
+                            //     processedImage = await sharp(processedImage)
+                            //         .extract({
+                            //             left: cropLeft,
+                            //             top: cropTop,
+                            //             width: cropWidth,
+                            //             height: cropHeight
+                            //         })
+                            //         .toBuffer()
+                            // }
                             if (this.config.debug) {
                                 processedImage = await sharp(processedImage)
                                     .composite([
@@ -106,13 +112,29 @@ export class ImageMerger {
                             return null;
                         }
                     })
-            )).filter(Boolean) as sharp.OverlayOptions[]; // 过滤掉为 null 的项，并断言类型
+            )).filter(Boolean) ; // 过滤掉为 null 的项，并断言类型
 
             // 合并所有图片
-            let result = await canvas
-                .composite(compositeOperations)
+            let result = await sharp({
+                    create: {
+                        width: Math.max(this.config.w, ...compositeOperations.map(op => op?.width || 0)),
+                        height: Math.max(this.config.h, ...compositeOperations.map(op => op?.height || 0)),
+                        channels: 4,
+                        background: { r: 0, g: 0, b: 0, alpha: 0 }
+                    }
+                })
+                .composite(compositeOperations as any)
                 .png()
                 .toBuffer();
+            
+            result = await sharp(result)
+                .extract({
+                    left: 0,
+                    top: 0,
+                    width: this.config.w,
+                    height: this.config.h
+                })
+                .toBuffer()
 
             // 如果 size !== 1，则整体缩放
             if (size !== 1) {
