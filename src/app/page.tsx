@@ -13,6 +13,7 @@ const initialImagesValue = `[
   {
     url: 'https://placehold.co/300x400/png',
     position: [300, 0],
+    clip: [50, 50, 50, 50],
     width: 300,
   }
 ]`;
