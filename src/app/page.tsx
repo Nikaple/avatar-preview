@@ -27,6 +27,7 @@ export default function Home() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState('');
 
   const handleImportFromURL = () => {
     const urlString = prompt('Please paste the API URL');
@@ -56,6 +57,25 @@ export default function Home() {
     } catch (error) {
       alert('Invalid URL. Please check the URL and try again.');
     }
+  };
+
+  const handleCopyURL = () => {
+    const params = new URLSearchParams();
+    params.append('w', w);
+    params.append('h', h);
+    params.append('images', images);
+    if (size) params.append('size', size);
+    if (debug) params.append('debug', 'true');
+
+    const url = `${window.location.origin}/api/merge?${params.toString()}`;
+
+    navigator.clipboard.writeText(url).then(() => {
+      setCopySuccess('Copied!');
+      setTimeout(() => setCopySuccess(''), 2000);
+    }, () => {
+      setCopySuccess('Failed to copy');
+      setTimeout(() => setCopySuccess(''), 2000);
+    });
   };
 
   const generatePreview = useCallback(async () => {
@@ -210,6 +230,14 @@ export default function Home() {
                   className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   Import from URL
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyURL}
+                  disabled={!previewImage || isLoading}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {copySuccess || 'Copy Preview URL'}
                 </button>
               </div>
             </form>
