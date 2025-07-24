@@ -31,23 +31,32 @@ export class ImageMerger {
                         try {
                             const response = await fetch(img.url);
                             if (!response.ok) {
-                                // 拉取失败，跳过该图片
-                                return null;
+                                return null; // Skip image on fetch failure
                             }
-                            let buffer: Buffer<ArrayBufferLike> = Buffer.from(await response.arrayBuffer());
-                            buffer = Buffer.from(buffer);
+                            const originalBuffer = Buffer.from(await response.arrayBuffer());
 
+                            // --- Optimization 1: Resize before processing ---
+                            const metadata = await sharp(originalBuffer).metadata();
+                            const originalAspectRatio = metadata.width! / metadata.height!;
+                            const resizeWidth = img.width;
+                            const resizeHeight = Math.floor(resizeWidth / originalAspectRatio);
+
+                            let processedImage = await sharp(originalBuffer)
+                                .resize({
+                                    width: resizeWidth,
+                                    height: resizeHeight,
+                                    fit: 'contain',
+                                    background: { r: 0, g: 0, b: 0, alpha: 0 }
+                                })
+                                .toBuffer();
+
+                            // --- Chroma Keying on the resized image ---
                             if (img.chromaThreshold && img.chromaTolerance) {
-                                // Ensure image has an alpha channel before processing pixels
-                                const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+                                const { data, info } = await sharp(processedImage).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
                                 const colorCounts = new Map<string, number>();
-                                // info.channels will be 4 (RGBA)
-                                for (let i = 0; i < data.length; i += info.channels) {
-                                    const r = data[i];
-                                    const g = data[i + 1];
-                                    const b = data[i + 2];
-                                    const key = `${r},${g},${b}`;
+                                for (let i = 0; i < data.length; i += 4) {
+                                    const key = `${data[i]},${data[i + 1]},${data[i + 2]}`;
                                     colorCounts.set(key, (colorCounts.get(key) || 0) + 1);
                                 }
 
@@ -63,40 +72,26 @@ export class ImageMerger {
                                 const totalPixels = info.width * info.height;
                                 if (dominantColor && (maxCount / totalPixels) > img.chromaThreshold) {
                                     const [r, g, b] = dominantColor.split(',').map(Number);
-                                    const tolerance = img.chromaTolerance * Math.sqrt(Math.pow(255, 2) * 3);
-                                    
-                                    // info.channels is guaranteed to be 4 here
-                                    for (let i = 0; i < data.length; i += info.channels) {
+                                    // --- Optimization 2: Use squared distance to avoid Math.sqrt ---
+                                    const toleranceSquared = Math.pow(img.chromaTolerance * 441.67, 2); // 441.67 is approx. sqrt(255^2 * 3)
+
+                                    for (let i = 0; i < data.length; i += 4) {
                                         const pr = data[i];
                                         const pg = data[i + 1];
                                         const pb = data[i + 2];
-                                        const distance = Math.sqrt(Math.pow(r - pr, 2) + Math.pow(g - pg, 2) + Math.pow(b - pb, 2));
-                                        if (distance < tolerance) {
-                                            data[i + 3] = 0; // Set alpha to 0, making the pixel transparent
+                                        const distanceSquared = Math.pow(r - pr, 2) + Math.pow(g - pg, 2) + Math.pow(b - pb, 2);
+                                        if (distanceSquared < toleranceSquared) {
+                                            data[i + 3] = 0; // Set alpha to transparent
                                         }
                                     }
-                                    buffer = await sharp(data, { raw: info }).png().toBuffer();
+                                    processedImage = await sharp(data, { raw: info }).png().toBuffer();
                                 }
                             }
 
-                            // 获取原始图片的元数据
-                            const metadata = await sharp(buffer).metadata();
-                            const originalAspectRatio = metadata.width! / metadata.height!;
-                            // 计算调整后的高度，保持纵横比
-                            const resizeWidth = img.width;
-                            const resizeHeight = Math.floor(resizeWidth / originalAspectRatio);
-                            // 先resize
-                            let processedImage = await sharp(buffer)
-                                .resize({
-                                    width: resizeWidth,
-                                    height: resizeHeight,
-                                    fit: 'contain',
-                                    background: { r: 0, g: 0, b: 0, alpha: 0 }
-                                })
-                                .toBuffer();
                             let offsetLeft = img.position[0];
                             let offsetTop = img.position[1];
-                            // 再clip（只在resize后切除，不影响缩放和位置）
+
+                            // --- Clipping after all other processing ---
                             if (img.clip && img.clip.length === 4) {
                                 const [top, right, bottom, left] = img.clip;
                                 const meta = await sharp(processedImage).metadata();
@@ -106,13 +101,14 @@ export class ImageMerger {
                                     .extract({
                                         left: left,
                                         top: top,
-                                        width: Math.min(width - left - right, width),
-                                        height: Math.min(height - top - bottom, height)
+                                        width: Math.max(0, width - left - right),
+                                        height: Math.max(0, height - top - bottom)
                                     })
                                     .toBuffer();
                                 offsetLeft += left;
                                 offsetTop += top;
                             }
+
                             const processedShapeImage = await sharp(processedImage).metadata();
                             if (this.config.debug) {
                                 processedImage = await sharp(processedImage)
@@ -144,7 +140,8 @@ export class ImageMerger {
 
                             return options;
                         } catch (e) {
-                            // 拉取或处理失败，跳过该图片
+                            // Log the error for debugging
+                            console.error(`Failed to process image ${img.url}:`, e);
                             return null;
                         }
                     })
