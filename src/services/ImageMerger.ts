@@ -1,7 +1,7 @@
+import { supportedBlendModes } from '@/types/blend';
 import sharp from 'sharp';
 import { MergeConfig } from '../types/image';
 import { FetchFunction, getFetch } from '../utils/runtime';
-import { supportedBlendModes } from '@/types/blend';
 
 export class ImageMerger {
     private readonly config: MergeConfig;
@@ -36,6 +36,49 @@ export class ImageMerger {
                             }
                             let buffer: Buffer<ArrayBufferLike> = Buffer.from(await response.arrayBuffer());
                             buffer = Buffer.from(buffer);
+
+                            if (img.chromaThreshold && img.chromaTolerance) {
+                                // Ensure image has an alpha channel before processing pixels
+                                const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+
+                                const colorCounts = new Map<string, number>();
+                                // info.channels will be 4 (RGBA)
+                                for (let i = 0; i < data.length; i += info.channels) {
+                                    const r = data[i];
+                                    const g = data[i + 1];
+                                    const b = data[i + 2];
+                                    const key = `${r},${g},${b}`;
+                                    colorCounts.set(key, (colorCounts.get(key) || 0) + 1);
+                                }
+
+                                let dominantColor: string | null = null;
+                                let maxCount = 0;
+                                for (const [color, count] of colorCounts.entries()) {
+                                    if (count > maxCount) {
+                                        dominantColor = color;
+                                        maxCount = count;
+                                    }
+                                }
+
+                                const totalPixels = info.width * info.height;
+                                if (dominantColor && (maxCount / totalPixels) > img.chromaThreshold) {
+                                    const [r, g, b] = dominantColor.split(',').map(Number);
+                                    const tolerance = img.chromaTolerance * Math.sqrt(Math.pow(255, 2) * 3);
+                                    
+                                    // info.channels is guaranteed to be 4 here
+                                    for (let i = 0; i < data.length; i += info.channels) {
+                                        const pr = data[i];
+                                        const pg = data[i + 1];
+                                        const pb = data[i + 2];
+                                        const distance = Math.sqrt(Math.pow(r - pr, 2) + Math.pow(g - pg, 2) + Math.pow(b - pb, 2));
+                                        if (distance < tolerance) {
+                                            data[i + 3] = 0; // Set alpha to 0, making the pixel transparent
+                                        }
+                                    }
+                                    buffer = await sharp(data, { raw: info }).png().toBuffer();
+                                }
+                            }
+
                             // 获取原始图片的元数据
                             const metadata = await sharp(buffer).metadata();
                             const originalAspectRatio = metadata.width! / metadata.height!;
@@ -71,21 +114,6 @@ export class ImageMerger {
                                 offsetTop += top;
                             }
                             const processedShapeImage = await sharp(processedImage).metadata();
-                            // if (processedShapeImage.width > this.config.w) {
-                            //     const cropLeft = img.position[0] < 0 ? -img.position[0] : 0;
-                            //     const cropTop = img.position[1] < 0 ? -img.position[1] : 0;
-                            //     const cropWidth = Math.min(this.config.w, processedShapeImage.width - cropLeft);
-                            //     const cropHeight = Math.min(this.config.h, processedShapeImage.height - cropTop);
-                            //     console.log({ cropLeft, cropTop, cropWidth, cropHeight })
-                            //     processedImage = await sharp(processedImage)
-                            //         .extract({
-                            //             left: cropLeft,
-                            //             top: cropTop,
-                            //             width: cropWidth,
-                            //             height: cropHeight
-                            //         })
-                            //         .toBuffer()
-                            // }
                             if (this.config.debug) {
                                 processedImage = await sharp(processedImage)
                                     .composite([

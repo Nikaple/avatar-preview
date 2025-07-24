@@ -1,12 +1,22 @@
 import { BlendMode } from './blend';
 
 export interface ImageOptions {
+  /** The URL of the image to be processed. */
   url: string;
+  /** The [x, y] coordinates for the top-left corner of the image when compositing. */
   position?: [number, number];
+  /** An array defining the pixels to clip from the [top, right, bottom, left] edges. */
   clip?: [number, number, number, number];
+  /** The desired width to resize the image to before compositing. */
   width?: number;
+  /** The desired height to resize the image to. Aspect ratio is maintained based on width. */
   height?: number;
+  /** The blend mode to use when compositing the image. */
   blend?: BlendMode;
+  /** The percentage (0-1) of a single color that must be exceeded to trigger removal. */
+  chromaThreshold?: number;
+  /** The tolerance (0-1) for color matching. Higher values remove a wider range of shades. */
+  chromaTolerance?: number;
 }
 
 
