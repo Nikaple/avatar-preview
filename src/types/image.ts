@@ -24,6 +24,6 @@ export interface MergeConfig {
     w: number;
     h: number;
     debug?: boolean;
-    images: ImageConfig[];
+    images: ImageOptions[];
     size?: number; // 新增，缩放倍数，默认为1
 }
