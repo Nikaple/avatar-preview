@@ -19,11 +19,10 @@ export interface ImageOptions {
   chromaTolerance?: number;
 }
 
-
 export interface MergeConfig {
-    w: number;
-    h: number;
-    debug?: boolean;
-    images: ImageOptions[];
-    size?: number; // 新增，缩放倍数，默认为1
+  w: number;
+  h: number;
+  debug?: boolean;
+  images: ImageOptions[];
+  size?: number; // 新增，缩放倍数，默认为1
 }

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import JSON5 from '@/utils/json5';
 import Image from 'next/image';
@@ -53,7 +53,6 @@ export default function Home() {
           setImages(imagesParam);
         }
       }
-
     } catch (error) {
       alert('Invalid URL. Please check the URL and try again.');
     }
@@ -69,13 +68,16 @@ export default function Home() {
 
     const url = `${window.location.origin}/api/merge?${params.toString()}`;
 
-    navigator.clipboard.writeText(url).then(() => {
-      setCopySuccess('Copied!');
-      setTimeout(() => setCopySuccess(''), 2000);
-    }, () => {
-      setCopySuccess('Failed to copy');
-      setTimeout(() => setCopySuccess(''), 2000);
-    });
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setCopySuccess('Copied!');
+        setTimeout(() => setCopySuccess(''), 2000);
+      },
+      () => {
+        setCopySuccess('Failed to copy');
+        setTimeout(() => setCopySuccess(''), 2000);
+      },
+    );
   };
 
   const generatePreview = useCallback(async () => {
@@ -138,7 +140,13 @@ export default function Home() {
               rel="noopener noreferrer"
               className="text-gray-600 hover:text-gray-900"
             >
-              <Image src="/github.svg" alt="GitHub" width={24} height={24} className="dark:invert" />
+              <Image
+                src="/github.svg"
+                alt="GitHub"
+                width={24}
+                height={24}
+                className="dark:invert"
+              />
             </a>
           </div>
         </div>
@@ -149,12 +157,13 @@ export default function Home() {
           {/* Control Panel */}
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-semibold mb-6">Configuration</h2>
-            <form
-              className="space-y-6"
-            >
+            <form className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="w" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="w"
+                    className="block text-sm font-medium text-gray-700"
+                  >
                     Width (w)
                   </label>
                   <input
@@ -167,7 +176,10 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="h" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="h"
+                    className="block text-sm font-medium text-gray-700"
+                  >
                     Height (h)
                   </label>
                   <input
@@ -182,7 +194,10 @@ export default function Home() {
               </div>
 
               <div>
-                <label htmlFor="images" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="images"
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Images (JSON5 format)
                 </label>
                 <textarea
@@ -197,7 +212,10 @@ export default function Home() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="size" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="size"
+                    className="block text-sm font-medium text-gray-700"
+                  >
                     Size (optional)
                   </label>
                   <input
@@ -217,7 +235,10 @@ export default function Home() {
                     onChange={(e) => setDebug(e.target.checked)}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="debug" className="ml-2 block text-sm text-gray-900">
+                  <label
+                    htmlFor="debug"
+                    className="ml-2 block text-sm text-gray-900"
+                  >
                     Debug Mode
                   </label>
                 </div>
@@ -271,7 +292,9 @@ export default function Home() {
               )}
               {!isLoading && !error && !previewImage && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <p className="text-gray-400">Image preview will appear here</p>
+                  <p className="text-gray-400">
+                    Image preview will appear here
+                  </p>
                 </div>
               )}
             </div>
