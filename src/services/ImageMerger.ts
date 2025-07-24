@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { MergeConfig } from '../types/image';
 import { FetchFunction, getFetch } from '../utils/runtime';
+import { supportedBlendModes } from '@/types/blend';
 
 export class ImageMerger {
     private readonly config: MergeConfig;
@@ -100,13 +101,20 @@ export class ImageMerger {
                                     ])
                                     .toBuffer()
                             }
-                            return {
+
+                            const options: any = {
                                 input: processedImage,
                                 width: processedShapeImage.width,
                                 height: processedShapeImage.height,
                                 left: offsetLeft,
                                 top: offsetTop
                             };
+
+                            if (img.blend && supportedBlendModes.includes(img.blend)) {
+                                options.blend = img.blend;
+                            }
+
+                            return options;
                         } catch (e) {
                             // 拉取或处理失败，跳过该图片
                             return null;
