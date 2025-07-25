@@ -1,4 +1,4 @@
-import { list, put } from '@vercel/blob';
+import { head, put } from '@vercel/blob';
 import { LRUCache } from 'lru-cache';
 
 // 初始化 LRU 缓存
@@ -15,15 +15,15 @@ export async function withBlobCache<T extends Buffer>(
 ): Promise<T> {
   try {
     // Check if blob exists first
-    const blobUrl = (await list({ prefix: key })).blobs?.[0]?.downloadUrl;
+    const blobUrl = (await head(key))?.downloadUrl;
 
     if (blobUrl) {
-      const startTime = Date.now();
+      const startTime = performance.now();
       const response = await fetch(blobUrl);
 
       if (response.ok) {
         const data = await response.arrayBuffer();
-        const endTime = Date.now();
+        const endTime = performance.now();
         console.log(
           `Blob cache hit: ${key}. Downloaded from blob in ${
             endTime - startTime
@@ -37,9 +37,10 @@ export async function withBlobCache<T extends Buffer>(
     console.warn(`Blob cache fetch failed for key ${key}:`, error);
   }
 
-  const startTime = Date.now();
+  // If blob does not exist or fetch failed, fetch from original source
+  const startTime = performance.now();
   const value = await fn();
-  const endTime = Date.now();
+  const endTime = performance.now();
   console.log(
     `Fetched from original source for key ${key} in ${endTime - startTime}ms.`,
   );
@@ -47,10 +48,22 @@ export async function withBlobCache<T extends Buffer>(
   try {
     await put(key, value, {
       access: 'public',
-      // allowOverwrite: true,
+      addRandomSuffix: false,
+      allowOverwrite: false, // Explicitly prevent overwriting
     });
   } catch (error) {
-    console.error(`Failed to store blob cache for key ${key}:`, error);
+    // This error is now expected if another request created the blob in the meantime.
+    // It can be safely ignored in a race condition scenario.
+    if (
+      error instanceof Error &&
+      error.message.includes('This blob already exists')
+    ) {
+      console.log(
+        `Blob already stored for key ${key}, likely by a concurrent request.`,
+      );
+    } else {
+      console.error(`Failed to store blob cache for key ${key}:`, error);
+    }
   }
 
   return value;
