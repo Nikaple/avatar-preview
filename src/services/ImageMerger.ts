@@ -1,8 +1,9 @@
 import { supportedBlendModes } from '@/types/blend';
+import crypto from 'crypto';
 import sharp from 'sharp';
 import { ImageSource, MergeConfig } from '../types/image';
 import { FetchFunction, getFetch } from '../utils/runtime';
-import { withCache } from './Cache';
+import { withBlobCache, withCache } from './Cache';
 
 export class ImageMerger {
   private readonly config: MergeConfig;
@@ -19,6 +20,22 @@ export class ImageMerger {
     return this.fetchFn;
   }
 
+  private async getOriginalImageBuffer(url: string): Promise<Buffer> {
+    const fetch = await this.initFetch();
+    const cacheKey = `image/${crypto
+      .createHash('sha1')
+      .update(url)
+      .digest('hex')}.png`;
+
+    return withBlobCache(cacheKey, async () => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
+      return Buffer.from(await response.arrayBuffer());
+    });
+  }
+
   public async merge(): Promise<Buffer> {
     try {
       const size = this.config.size ?? 1;
@@ -29,10 +46,12 @@ export class ImageMerger {
           this.config.images
             .filter((img) => img.url && img.url.trim() !== '') // 过滤掉空 URL
             .map(async (img) => {
-              return withCache(JSON.stringify(img), () => this.processImage(img))
+              // 使用内存缓存来缓存处理后的图片（composite options）
+              // 原始图片下载由 withBlobCache 在 processImage 内部处理
+              return withCache(JSON.stringify(img), () => this.processImage(img));
             }),
         )
-      ).filter(Boolean); // 过滤掉为 null 的项，并断言类型
+      ).filter(Boolean); // 过滤掉为 null 的项
 
       // 合并所有图片
       let result = await sharp({
@@ -80,23 +99,14 @@ export class ImageMerger {
   }
 
   private async processImage(img: ImageSource) {
-    const fetch = await this.initFetch();
     try {
-      const response = await fetch(img.url);
-      if (!response.ok) {
-        return null; // Skip image on fetch failure
-      }
-      const originalBuffer = Buffer.from(
-        await response.arrayBuffer(),
-      );
+      const originalBuffer = await this.getOriginalImageBuffer(img.url);
 
       // --- Optimization 1: Resize before processing ---
       const metadata = await sharp(originalBuffer).metadata();
       const originalAspectRatio = metadata.width! / metadata.height!;
       const resizeWidth = img.width;
-      const resizeHeight = Math.floor(
-        resizeWidth / originalAspectRatio,
-      );
+      const resizeHeight = Math.floor(resizeWidth / originalAspectRatio);
 
       let processedImage = await sharp(originalBuffer)
         .resize({
@@ -130,16 +140,10 @@ export class ImageMerger {
         }
 
         const totalPixels = info.width * info.height;
-        if (
-          dominantColor &&
-          maxCount / totalPixels > img.chromaThreshold
-        ) {
+        if (dominantColor && maxCount / totalPixels > img.chromaThreshold) {
           const [r, g, b] = dominantColor.split(',').map(Number);
           // --- Optimization 2: Use squared distance to avoid Math.sqrt ---
-          const toleranceSquared = Math.pow(
-            img.chromaTolerance * 441.67,
-            2,
-          ); // 441.67 is approx. sqrt(255^2 * 3)
+          const toleranceSquared = Math.pow(img.chromaTolerance * 441.67, 2);
 
           for (let i = 0; i < data.length; i += 4) {
             const pr = data[i];
@@ -153,9 +157,7 @@ export class ImageMerger {
               data[i + 3] = 0; // Set alpha to transparent
             }
           }
-          processedImage = await sharp(data, { raw: info })
-            .png()
-            .toBuffer();
+          processedImage = await sharp(data, { raw: info }).png().toBuffer();
         }
       }
 
@@ -180,8 +182,7 @@ export class ImageMerger {
         offsetTop += top;
       }
 
-      const processedShapeImage =
-        await sharp(processedImage).metadata();
+      const processedShapeImage = await sharp(processedImage).metadata();
       if (this.config.debug) {
         processedImage = await sharp(processedImage)
           .composite([
