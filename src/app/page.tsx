@@ -301,6 +301,17 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      <footer className="text-center py-4 text-gray-600 text-sm border-t border-gray-200 mt-8">
+        <a
+          href="https://stats.uptimerobot.com/c6IcMg4lLK"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-gray-900"
+        >
+          Uptime Status
+        </a>
+      </footer>
     </div>
   );
 }
