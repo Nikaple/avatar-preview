@@ -265,9 +265,9 @@ export default function Home() {
           </div>
 
           {/* Preview Area */}
-          <div className="bg-white p-6 rounded-lg shadow flex flex-col h-full">
+          <div className="bg-white p-6 rounded-lg shadow flex flex-col">
             <h2 className="text-xl font-semibold mb-4">Preview</h2>
-            <div className="w-full flex-grow relative bg-gray-100 rounded-md">
+            <div className="w-full flex-grow relative bg-gray-100 rounded-md min-h-[400px]">
               {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <p className="text-gray-500">Loading preview...</p>

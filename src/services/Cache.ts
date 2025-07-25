@@ -15,7 +15,7 @@ export async function withBlobCache<T extends Buffer>(
 ): Promise<T> {
   try {
     // Check if blob exists first
-    const blobUrl = (await head(key))?.downloadUrl;
+    const blobUrl = (await head(key).catch(() => null))?.downloadUrl;
 
     if (blobUrl) {
       const startTime = performance.now();
