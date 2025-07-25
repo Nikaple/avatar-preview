@@ -27,6 +27,7 @@ function isValidMergeConfig(config: any): config is MergeConfig {
 
 export async function GET(request: NextRequest) {
   try {
+    const startTime = Date.now();
     const { searchParams } = new URL(request.url);
 
     // 解析查询参数，images 支持 JSON5
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     // 合并图片
     const merger = new ImageMerger(config);
     const resultBuffer = await merger.merge();
+    console.log(`Merge completed in ${Date.now() - startTime}ms`)
 
     // 返回处理后的图片
     return new NextResponse(resultBuffer, {
