@@ -1,6 +1,6 @@
 import { BlendMode } from './blend';
 
-export interface ImageOptions {
+export interface ImageSource {
   /** The URL of the image to be processed. */
   url: string;
   /** The [x, y] coordinates for the top-left corner of the image when compositing. */
@@ -23,6 +23,6 @@ export interface MergeConfig {
   w: number;
   h: number;
   debug?: boolean;
-  images: ImageOptions[];
+  images: ImageSource[];
   size?: number; // 新增，缩放倍数，默认为1
 }
