@@ -19,6 +19,7 @@ export function withCache<T>(key: string, fn: () => Promise<T>): Promise<T>
 export function withCache<T>(key: string, fn: () => T): T {
   const cachedValue = cache.get(key);
   if (cachedValue) {
+    console.log(`cache hit: ${key}`);
     return cachedValue;
   } else {
     const value = fn();
