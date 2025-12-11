@@ -126,15 +126,20 @@ export async function GET(request: NextRequest) {
     try {
       if (layersParam && layersParam.trim() !== '') {
         layers = JSON5.parse(layersParam);
-        // 如果有 scale 参数，应用到所有组件图层
-        if (scale && layers) {
+        console.log('[API] Parsed layers:', JSON.stringify(layers, null, 2));
+        
+        // 如果有全局 scale 参数，应用到所有没有 scale 的组件图层
+        if (scale !== undefined && layers) {
           layers = layers.map((layer) => {
-            if (layer.type === 'component') {
+            if (layer.type === 'component' && layer.scale === undefined) {
+              console.log(`[API] Applying global scale ${scale} to component ${layer.name}`);
               return { ...layer, scale };
             }
             return layer;
           });
         }
+        
+        console.log('[API] Final layers:', JSON.stringify(layers, null, 2));
       }
     } catch (error) {
       console.error('Failed to parse layers parameter:', error);

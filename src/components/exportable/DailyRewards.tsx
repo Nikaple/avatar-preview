@@ -33,17 +33,11 @@ export default function DailyRewards({
         <div
             style={{
                 width: 250,
-                height: 321.7,
-                paddingTop: 12,
-                paddingBottom: 16,
-                paddingLeft: 8,
-                paddingRight: 8,
+                padding: '12px 8px 16px 8px',
                 backgroundColor: backgroundColor,
                 borderRadius: 12,
-                // 用 border 替代 outline（Satori 不支持 outline）
                 border: '1px solid white',
                 flexDirection: 'column',
-                justifyContent: 'center',
                 alignItems: 'center',
                 gap: 12,
                 display: 'flex',
@@ -57,23 +51,20 @@ export default function DailyRewards({
                     fontSize: 24,
                     fontFamily: 'DIN Pro',
                     fontWeight: '700',
-                    wordBreak: 'break-word', // 修正：wordWrap -> wordBreak
+                    wordBreak: 'break-word',
                 }}
             >
                 {title}
             </div>
 
-            {/* 奖励物品网格 */}
+            {/* 奖励物品网格 - 使用 flexWrap 实现每行 2 个 */}
             <div
                 style={{
-                    width: 230.52,
-                    height: 254,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: 8,
                     display: 'flex',
+                    flexDirection: 'row',
                     flexWrap: 'wrap',
-                    alignContent: 'center',
+                    gap: 8,
+                    justifyContent: 'center',
                 }}
             >
                 {items.map((item, index) => (
@@ -81,18 +72,14 @@ export default function DailyRewards({
                         key={index}
                         style={{
                             width: 110,
-                            height: 120,
-                            paddingTop: 12,
-                            paddingBottom: 4,
-                            paddingLeft: 6,
-                            paddingRight: 6,
-                            backgroundColor: cardBackgroundColor, // 修正：background -> backgroundColor
+                            padding: '12px 16px 4px',
+                            backgroundColor: cardBackgroundColor,
                             borderRadius: 12.51,
                             flexDirection: 'column',
-                            justifyContent: 'flex-start',
                             alignItems: 'center',
                             gap: 4,
                             display: 'flex',
+                            flexShrink: 0,
                         }}
                     >
                         {/* 物品图标/颜色块 */}
@@ -101,8 +88,9 @@ export default function DailyRewards({
                                 width: 80,
                                 height: 80,
                                 opacity: 0.8,
-                                backgroundColor: item.color || '#10DCA9', // 修正：background -> backgroundColor
+                                backgroundColor: item.color || '#10DCA9',
                                 borderRadius: 8,
+                                flexShrink: 0,
                             }}
                         />
 
@@ -115,7 +103,9 @@ export default function DailyRewards({
                                 fontSize: 16,
                                 fontFamily: 'DIN Pro',
                                 fontWeight: '700',
-                                wordBreak: 'break-word', // 修正：wordWrap -> wordBreak
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
                             }}
                         >
                             {item.name}

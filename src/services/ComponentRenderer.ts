@@ -67,6 +67,8 @@ export class ComponentRenderer {
     const height = options.height || componentConfig.defaultHeight || 200;
     const scale = options.scale !== undefined ? options.scale : 1;
 
+    console.log(`[ComponentRenderer] Rendering ${componentName} with width=${width}, height=${height}, scale=${scale}`);
+
     // 4. 加载字体
     const fonts = await this.loadFonts();
 
@@ -77,17 +79,16 @@ export class ComponentRenderer {
     );
 
     // 6. 如果 scale !== 1，用 div 容器包裹并应用 CSS transform scale
+    // 注意：容器不设置固定尺寸，让它自适应内容，避免灰色背景
     const element =
       scale !== 1
         ? React.createElement(
             'div',
             {
-                style: {
-                  display: 'flex',
+              style: {
+                display: 'flex',
                 transform: `scale(${scale})`,
                 transformOrigin: 'top left',
-                width: width,
-                height: height,
               },
             },
             componentElement,
@@ -97,6 +98,8 @@ export class ComponentRenderer {
     // 计算实际渲染尺寸（容器尺寸需要考虑缩放）
     const renderWidth = Math.round(width * scale);
     const renderHeight = Math.round(height * scale);
+
+    console.log(`[ComponentRenderer] Satori container size: ${renderWidth}x${renderHeight}`);
 
     try {
       // 7. 使用 Satori 渲染为 SVG（使用缩放后的尺寸作为容器）

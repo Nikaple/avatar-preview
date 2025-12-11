@@ -43,9 +43,9 @@ export default function TestLivePage() {
             const updatedLayers = parsedLayers.map((layer: any) => {
                 if (layer.type === 'component') {
                     return {
-                        ...layer,
                         width: parseInt(w),
                         height: parseInt(h),
+                        ...layer,
                     };
                 }
                 return layer;
