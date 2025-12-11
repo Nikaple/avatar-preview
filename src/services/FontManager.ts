@@ -46,6 +46,10 @@ export class FontManager {
 
   /**
    * 注册默认字体
+   *
+   * 添加新字体只需要：
+   * 1. 将字体文件放到 fonts 文件夹
+   * 2. 在下面添加一项配置
    */
   private registerDefaultFonts() {
     // 注册 Noto Sans SC（中文字体）
@@ -76,7 +80,7 @@ export class FontManager {
     // 注册完整键（包含 weight 和 style）
     const fullKey = this.getFontKey(config.name, config.weight, config.style);
     this.fonts.set(fullKey, config);
-    
+
     // 注册基础键（不包含 weight 和 style，用于回退）
     const baseKey = this.getFontKey(config.name);
     if (!this.fonts.has(baseKey)) {
@@ -86,9 +90,13 @@ export class FontManager {
     // 注册别名
     if (config.aliases) {
       config.aliases.forEach((alias) => {
-        const aliasFullKey = this.getFontKey(alias, config.weight, config.style);
+        const aliasFullKey = this.getFontKey(
+          alias,
+          config.weight,
+          config.style,
+        );
         this.fonts.set(aliasFullKey, config);
-        
+
         const aliasBaseKey = this.getFontKey(alias);
         if (!this.fonts.has(aliasBaseKey)) {
           this.fonts.set(aliasBaseKey, config);
@@ -162,6 +170,19 @@ export class FontManager {
   }
 
   /**
+   * 获取字体的 ArrayBuffer 数据（用于 Satori）
+   */
+  public async getFontArrayBuffer(fontPath: string): Promise<ArrayBuffer> {
+    const fs = await import('fs/promises');
+    const fullPath = resolve(this.fontsDir, fontPath);
+    const buffer = await fs.readFile(fullPath);
+    return buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength,
+    ) as ArrayBuffer;
+  }
+
+  /**
    * 生成 @font-face CSS 规则
    */
   public generateFontFace(config: FontConfig): string {
@@ -173,7 +194,7 @@ export class FontManager {
     const mimeType = this.getMimeType(config.format);
     const weight = config.weight || 400;
     const style = config.style || 'normal';
-    
+
     // 获取正确的 format 值
     const formatValue = this.getFormatValue(config.format);
 
@@ -187,7 +208,7 @@ export class FontManager {
       }
     `;
   }
-  
+
   /**
    * 获取 CSS format() 函数的值
    */

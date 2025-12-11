@@ -3,18 +3,19 @@ import crypto from 'crypto';
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import sharp from 'sharp';
-import { ImageSource, MergeConfig, TextSource } from '../types/image';
+import { IComponent, IImage, IText, Layer, MergeConfig } from '../types/image';
 import { FetchFunction, getFetch } from '../utils/runtime';
 import { withBlobCache, withCache } from './Cache';
 import { fontManager } from './FontManager';
 import { textMeasurement } from './TextMeasurement';
+import { ComponentRenderer } from './ComponentRenderer';
 
 // 设置字体配置
 const setupFontConfig = () => {
   try {
     const fontsDir = resolve(process.cwd(), 'fonts');
     const fontConfigPath = resolve(fontsDir, 'fonts.conf');
-    
+
     // 动态生成 fonts.conf 文件内容
     const fontConfigContent = `<?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
@@ -26,7 +27,7 @@ const setupFontConfig = () => {
 
     // 写入字体配置文件
     writeFileSync(fontConfigPath, fontConfigContent, 'utf8');
-    
+
     // 设置环境变量，指向实际的 fonts 目录
     process.env.FONTCONFIG_PATH = fontsDir;
     process.env.FONTCONFIG_FILE = fontConfigPath;
@@ -41,9 +42,11 @@ setupFontConfig();
 export class ImageMerger {
   private readonly config: MergeConfig;
   private fetchFn: FetchFunction | null = null;
+  private componentRenderer: ComponentRenderer;
 
   constructor(config: MergeConfig) {
     this.config = config;
+    this.componentRenderer = new ComponentRenderer();
   }
 
   private async initFetch(): Promise<FetchFunction> {
@@ -73,49 +76,42 @@ export class ImageMerger {
     try {
       const size = this.config.size ?? 1;
 
-      // 下载并处理所有图片
-      const imageOperations = (
+      // 解析图层（支持 layers 或 images 参数）
+      const layers = this.parseLayers();
+
+      // 处理所有图层
+      const layerOperations = (
         await Promise.all(
-          this.config.images
-            .filter((img) => img.url && img.url.trim() !== '') // 过滤掉空 URL
-            .map(async (img) => {
-              // 使用内存缓存来缓存处理后的图片（composite options）
-              // 原始图片下载由 withBlobCache 在 processImage 内部处理
-              return withCache(JSON.stringify(img), () => this.processImage(img));
-            }),
+          layers.map(async (layer, index) => {
+            try {
+              return await withCache(
+                `layer-${index}-${JSON.stringify(layer)}`,
+                () => this.processLayer(layer),
+              );
+            } catch (error) {
+              console.error(`Failed to process layer ${index}:`, error);
+              return null;
+            }
+          }),
         )
       ).filter(Boolean); // 过滤掉为 null 的项
 
-      // 处理所有文字
-      const textOperations = this.config.texts
-        ? (
-            await Promise.all(
-              this.config.texts.map(async (text) => {
-                return withCache(JSON.stringify(text), () => this.processText(text));
-              }),
-            )
-          ).filter(Boolean)
-        : [];
-
-      // 合并所有操作
-      const compositeOperations = [...imageOperations, ...textOperations];
-
-      // 合并所有图片
+      // 合并所有图层
       let result = await sharp({
         create: {
           width: Math.max(
             this.config.w,
-            ...compositeOperations.map((op) => op?.width || 0),
+            ...layerOperations.map((op) => op?.width || 0),
           ),
           height: Math.max(
             this.config.h,
-            ...compositeOperations.map((op) => op?.height || 0),
+            ...layerOperations.map((op) => op?.height || 0),
           ),
           channels: 4,
           background: { r: 0, g: 0, b: 0, alpha: 0 },
         },
       })
-        .composite(compositeOperations as any)
+        .composite(layerOperations as any)
         .png()
         .toBuffer();
 
@@ -145,7 +141,117 @@ export class ImageMerger {
     }
   }
 
-  private async processImage(img: ImageSource) {
+  /**
+   * 解析图层（优先使用 layers，否则使用 images）
+   */
+  private parseLayers(): Layer[] {
+    // 优先使用 layers 参数
+    if (this.config.layers && this.config.layers.length > 0) {
+      return this.normalizeLayers(this.config.layers);
+    }
+
+    // 向前兼容：使用 images 参数
+    if (this.config.images && this.config.images.length > 0) {
+      return this.normalizeLayers(this.config.images);
+    }
+
+    return [];
+  }
+
+  /**
+   * 标准化图层（为没有 type 的图层添加默认值）
+   * 规则：没有 type 字段就默认为 'image'
+   */
+  private normalizeLayers(layers: Layer[]): Layer[] {
+    return layers.map((layer) => {
+      if (!layer.type) {
+        return { ...layer, type: 'image' as const };
+      }
+      return layer;
+    });
+  }
+
+  /**
+   * 处理单个图层
+   */
+  private async processLayer(layer: Layer) {
+    switch (layer.type) {
+      case 'image':
+        return this.processImage(layer as IImage);
+      case 'text':
+        return this.processText(layer as IText);
+      case 'component':
+        return this.processComponent(layer as IComponent);
+      default:
+        console.warn(`Unknown layer type: ${(layer as any).type}`);
+        return null;
+    }
+  }
+
+  /**
+   * 处理组件图层
+   */
+  private async processComponent(component: IComponent) {
+    try {
+      console.log(`[ImageMerger] Processing component with scale: ${component.scale}`);
+      
+      // 1. 渲染组件为 PNG Buffer
+      const componentBuffer = await this.componentRenderer.render(
+        component.name,
+        component.props,
+        {
+          width: component.width,
+          height: component.height,
+          scale: component.scale,
+        },
+      );
+
+      // 2. 获取图片元数据
+      const metadata = await sharp(componentBuffer).metadata();
+      const width = metadata.width || component.width || 300;
+      const height = metadata.height || component.height || 200;
+
+      // 3. 添加调试边框（如果开启）
+      let processedBuffer = componentBuffer;
+      if (this.config.debug) {
+        processedBuffer = await sharp(componentBuffer)
+          .composite([
+            {
+              input: Buffer.from(
+                `<svg width="${width}" height="${height}">
+                  <rect x="0" y="0" width="${width}" height="${height}"
+                    style="fill:none;stroke:blue;stroke-width:3;stroke-dasharray:5,5;" />
+                  <text x="5" y="15" style="fill:blue;font-size:12px;font-family:Arial;">Component: ${component.name}</text>
+                </svg>`,
+              ),
+              left: 0,
+              top: 0,
+            },
+          ])
+          .toBuffer();
+      }
+
+      // 4. 构建合成选项
+      const options: any = {
+        input: processedBuffer,
+        width,
+        height,
+        left: component.position[0],
+        top: component.position[1],
+      };
+
+      if (component.blend && supportedBlendModes.includes(component.blend)) {
+        options.blend = component.blend;
+      }
+
+      return options;
+    } catch (error) {
+      console.error(`Failed to process component "${component.name}":`, error);
+      return null;
+    }
+  }
+
+  private async processImage(img: IImage) {
     try {
       const originalBuffer = await this.getOriginalImageBuffer(img.url);
 
@@ -197,9 +303,7 @@ export class ImageMerger {
             const pg = data[i + 1];
             const pb = data[i + 2];
             const distanceSquared =
-              Math.pow(r - pr, 2) +
-              Math.pow(g - pg, 2) +
-              Math.pow(b - pb, 2);
+              Math.pow(r - pr, 2) + Math.pow(g - pg, 2) + Math.pow(b - pb, 2);
             if (distanceSquared < toleranceSquared) {
               data[i + 3] = 0; // Set alpha to transparent
             }
@@ -267,14 +371,15 @@ export class ImageMerger {
     }
   }
 
-  private async processText(text: TextSource) {
+  private async processText(text: IText) {
     try {
       // 设置默认值，支持简化属性
       const fontSize = text.fontSize || 16;
       const color = text.color || '#000000';
-      const fontFamily = text.fontFamily || 'Noto Sans SC, Microsoft YaHei, Arial, sans-serif';
-      const fontWeight = text.bold ? 'bold' : (text.fontWeight || 'normal');
-      const fontStyle = text.italic ? 'italic' : (text.fontStyle || 'normal');
+      const fontFamily =
+        text.fontFamily || 'Noto Sans SC, Microsoft YaHei, Arial, sans-serif';
+      const fontWeight = text.bold ? 'bold' : text.fontWeight || 'normal';
+      const fontStyle = text.italic ? 'italic' : text.fontStyle || 'normal';
       const textDecoration = text.textDecoration || 'none';
       const textAlign = text.textAlign || 'left';
       const lineHeight = text.lineHeight || 1.2;
@@ -284,25 +389,31 @@ export class ImageMerger {
       // 使用精确的文字测量进行换行
       // 如果有 maxWidth，使用智能换行；否则只按 \n 分割
       const lines = await textMeasurement.wrapText(
-        text.text, 
-        text.maxWidth || 0, 
-        fontSize, 
-        fontFamily, 
-        fontWeight, 
-        fontStyle
+        text.text,
+        text.maxWidth || 0,
+        fontSize,
+        fontFamily,
+        fontWeight,
+        fontStyle,
       );
 
       // 精确测量每行文字的宽度
-      const lineWidths = await textMeasurement.measureLines(lines, fontSize, fontFamily, fontWeight, fontStyle);
-      
+      const lineWidths = await textMeasurement.measureLines(
+        lines,
+        fontSize,
+        fontFamily,
+        fontWeight,
+        fontStyle,
+      );
+
       // 计算文字区域尺寸
       const lineHeightPx = fontSize * lineHeight;
       const textHeight = lines.length * lineHeightPx;
-      
+
       // 计算实际需要的宽度，考虑描边
       const maxLineWidth = Math.max(...lineWidths);
       const padding = strokeWidth > 0 ? strokeWidth * 2 : 0;
-      const textWidth = text.maxWidth || (maxLineWidth + padding);
+      const textWidth = text.maxWidth || maxLineWidth + padding;
 
       // 生成 SVG 内容
       const svgContent = await this.generateTextSVG({
@@ -323,13 +434,11 @@ export class ImageMerger {
       });
 
       // 将 SVG 转换为 PNG
-      const textBuffer = await sharp(Buffer.from(svgContent))
-        .png()
-        .toBuffer();
+      const textBuffer = await sharp(Buffer.from(svgContent)).png().toBuffer();
 
       // 根据对齐方式调整 SVG 的放置位置
       let leftOffset = text.position[0];
-      
+
       if (textAlign === 'center') {
         // 居中对齐：向左偏移一半宽度
         leftOffset -= textWidth / 2;
@@ -396,11 +505,11 @@ export class ImageMerger {
 
     // 生成字体 @font-face 规则
     const fontFaces = this.generateFontFaces(fontFamily, fontWeight, fontStyle);
-    
+
     // 处理字体族名称，为每个字体添加引号
     const quotedFontFamily = fontFamily
       .split(',')
-      .map(f => {
+      .map((f) => {
         const trimmed = f.trim().replace(/['"]/g, '');
         return `'${trimmed}'`;
       })
@@ -408,10 +517,10 @@ export class ImageMerger {
 
     // 计算内边距（用于描边）
     const padding = strokeWidth > 0 ? strokeWidth : 0;
-    
+
     // 构建 SVG，添加 viewBox 确保内容不被裁剪
     let svgContent = `<svg width="${Math.ceil(textWidth)}" height="${Math.ceil(textHeight)}" xmlns="http://www.w3.org/2000/svg">`;
-    
+
     // 添加字体和样式定义
     svgContent += `<defs><style>
       ${fontFaces}
@@ -430,7 +539,7 @@ export class ImageMerger {
     lines.forEach((line, index) => {
       const y = (index + 1) * lineHeightPx - (lineHeightPx - fontSize) / 2;
       let x = padding;
-      
+
       // 根据对齐方式计算 x 坐标
       if (textAlign === 'center') {
         x = textWidth / 2;
@@ -438,7 +547,12 @@ export class ImageMerger {
         x = textWidth - padding;
       }
 
-      const textAnchor = textAlign === 'center' ? 'middle' : textAlign === 'right' ? 'end' : 'start';
+      const textAnchor =
+        textAlign === 'center'
+          ? 'middle'
+          : textAlign === 'right'
+            ? 'end'
+            : 'start';
       svgContent += `<text x="${x}" y="${y}" class="text-style" text-anchor="${textAnchor}">${this.escapeXml(line)}</text>`;
     });
 
@@ -454,13 +568,19 @@ export class ImageMerger {
     fontWeight: string | number,
     fontStyle: string,
   ): string {
-    const weight = typeof fontWeight === 'string' && fontWeight === 'bold' ? 700 : 
-                   typeof fontWeight === 'number' ? fontWeight : 400;
-    
+    const weight =
+      typeof fontWeight === 'string' && fontWeight === 'bold'
+        ? 700
+        : typeof fontWeight === 'number'
+          ? fontWeight
+          : 400;
+
     // 解析字体族，获取所有可能的字体
-    const fontFamilies = fontFamily.split(',').map(f => f.trim().replace(/['"]/g, ''));
+    const fontFamilies = fontFamily
+      .split(',')
+      .map((f) => f.trim().replace(/['"]/g, ''));
     const fontFaces: string[] = [];
-    
+
     for (const family of fontFamilies) {
       const font = fontManager.getFont(family, weight, fontStyle);
       if (font) {
@@ -470,7 +590,7 @@ export class ImageMerger {
         }
       }
     }
-    
+
     return fontFaces.join('\n');
   }
 

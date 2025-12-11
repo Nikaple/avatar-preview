@@ -8,10 +8,10 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     const fonts = fontManager.getAllFonts();
-    
+
     return NextResponse.json({
       success: true,
-      fonts: fonts.map(font => ({
+      fonts: fonts.map((font) => ({
         name: font.name,
         weight: font.weight,
         style: font.style,
@@ -27,7 +27,7 @@ export async function GET() {
         success: false,
         error: 'Failed to fetch fonts',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

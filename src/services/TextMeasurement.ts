@@ -75,17 +75,23 @@ export class TextMeasurement {
     }
 
     // 解析字体权重
-    const weight = typeof fontWeight === 'string' && fontWeight === 'bold' ? 700 : 
-                   typeof fontWeight === 'number' ? fontWeight : 400;
+    const weight =
+      typeof fontWeight === 'string' && fontWeight === 'bold'
+        ? 700
+        : typeof fontWeight === 'number'
+          ? fontWeight
+          : 400;
 
     // 获取字体配置
-    const fontFamilies = fontFamily.split(',').map(f => f.trim().replace(/['"]/g, ''));
-    
+    const fontFamilies = fontFamily
+      .split(',')
+      .map((f) => f.trim().replace(/['"]/g, ''));
+
     let lastError: Error | null = null;
-    
+
     for (const family of fontFamilies) {
       const fontConfig = fontManager.getFont(family, weight, fontStyle);
-      
+
       if (fontConfig) {
         try {
           const font = await this.loadFont(fontConfig.path);
@@ -94,7 +100,9 @@ export class TextMeasurement {
           return width;
         } catch (error) {
           lastError = error as Error;
-          console.warn(`Failed to load font ${family} (${fontConfig.path}): ${error}`);
+          console.warn(
+            `Failed to load font ${family} (${fontConfig.path}): ${error}`,
+          );
           continue;
         }
       }
@@ -103,20 +111,24 @@ export class TextMeasurement {
     // 如果所有字体都失败，抛出错误
     throw new Error(
       `Failed to measure text: No valid font found for "${fontFamily}". ` +
-      `Last error: ${lastError?.message || 'Font not registered'}`
+        `Last error: ${lastError?.message || 'Font not registered'}`,
     );
   }
 
   /**
    * 使用 opentype.js 计算文字宽度
    */
-  private calculateTextWidth(font: opentype.Font, text: string, fontSize: number): number {
+  private calculateTextWidth(
+    font: opentype.Font,
+    text: string,
+    fontSize: number,
+  ): number {
     const scale = fontSize / font.unitsPerEm;
     let width = 0;
 
     for (let i = 0; i < text.length; i++) {
       const glyph = font.charToGlyph(text[i]);
-      
+
       if (glyph.advanceWidth) {
         width += glyph.advanceWidth * scale;
       }
@@ -143,7 +155,9 @@ export class TextMeasurement {
     fontStyle: string = 'normal',
   ): Promise<number[]> {
     return Promise.all(
-      lines.map(line => this.measureText(line, fontSize, fontFamily, fontWeight, fontStyle))
+      lines.map((line) =>
+        this.measureText(line, fontSize, fontFamily, fontWeight, fontStyle),
+      ),
     );
   }
 
@@ -171,10 +185,10 @@ export class TextMeasurement {
     }
 
     const lines: string[] = [];
-    
+
     // 首先按手动换行符分割
     const paragraphs = text.split('\n');
-    
+
     // 对每个段落进行自动换行
     for (const paragraph of paragraphs) {
       if (paragraph === '') {
@@ -182,13 +196,19 @@ export class TextMeasurement {
         lines.push('');
         continue;
       }
-      
+
       let currentLine = '';
 
       for (let i = 0; i < paragraph.length; i++) {
         const char = paragraph[i];
         const testLine = currentLine + char;
-        const width = await this.measureText(testLine, fontSize, fontFamily, fontWeight, fontStyle);
+        const width = await this.measureText(
+          testLine,
+          fontSize,
+          fontFamily,
+          fontWeight,
+          fontStyle,
+        );
 
         if (width > maxWidth && currentLine.length > 0) {
           lines.push(currentLine);
