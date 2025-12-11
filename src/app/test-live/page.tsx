@@ -2,35 +2,305 @@
 
 import JSON5 from '@/utils/json5';
 import { useCallback, useEffect, useState } from 'react';
-import { DailyRewards } from '@/components/exportable';
+import {
+    RewardsGrid,
+    RewardsVertical,
+    RewardsStep,
+    LiveQuestion,
+    LiveQuestionReward,
+    LiveTitle,
+    Introduction,
+} from '@/components/exportable';
+
+// 统一画布尺寸
+const CANVAS_WIDTH = 600;
+const CANVAS_HEIGHT = 800;
+
+// 组件测试配置表
+const COMPONENT_TESTS = [
+    {
+        name: 'RewardsGrid',
+        component: RewardsGrid,
+        defaultLayers: [
+            {
+                type: 'component',
+                name: 'RewardsGrid',
+                position: [0, 0],
+                width: 250,
+                height: 321.7,
+                scale: 1,
+                props: {
+                    title: 'Rewards for today',
+                    items: [
+                        { name: 'Item name', color: '#10DCA9' },
+                        { name: 'Item name', color: '#10DCA9' },
+                        { name: 'Item name', color: '#10DCA9' },
+                        { name: 'Item name', color: '#10DCA9' },
+                    ],
+                },
+            },
+        ],
+    },
+    {
+        name: 'RewardsVertical',
+        component: RewardsVertical,
+        defaultLayers: [
+            {
+                type: 'component',
+                name: 'RewardsVertical',
+                position: [0, 0],
+                width: 234,
+                height: 254,
+                scale: 1,
+                props: {
+                    title: 'Rewards for Today',
+                    items: [
+                        { name: '60 UC', quantity: 'X15', color: '#10DCA9' },
+                        { name: '1000 VIP Points', quantity: 'X5', color: '#10DCA9' },
+                    ],
+                },
+            },
+        ],
+    },
+    {
+        name: 'RewardsStep',
+        component: RewardsStep,
+        defaultLayers: [
+            {
+                type: 'component',
+                name: 'RewardsStep',
+                position: [0, 0],
+                width: 250,
+                height: 200,
+                scale: 1,
+                props: {
+                    title: 'Cumulative Recharge',
+                    steps: [
+                        { amount: '100', reward: 'Gift 1', color: '#10DCA9', achieved: true },
+                        { amount: '500', reward: 'Gift 2', color: '#FFD700', achieved: true },
+                        { amount: '1000', reward: 'Gift 3', color: '#FF6B6B', achieved: false },
+                    ],
+                },
+            },
+        ],
+    },
+    {
+        name: 'LiveQuestion',
+        component: LiveQuestion,
+        defaultLayers: [
+            {
+                type: 'component',
+                name: 'LiveQuestion',
+                position: [0, 0],
+                width: 300,
+                height: 400,
+                scale: 1,
+                props: {
+                    question: 'What is the capital of France?',
+                    options: [
+                        { text: 'London', isCorrect: false },
+                        { text: 'Paris', isCorrect: true },
+                        { text: 'Berlin', isCorrect: false },
+                        { text: 'Madrid', isCorrect: false },
+                    ],
+                    timer: 30,
+                },
+            },
+        ],
+    },
+    {
+        name: 'LiveQuestionReward',
+        component: LiveQuestionReward,
+        defaultLayers: [
+            {
+                type: 'component',
+                name: 'LiveQuestionReward',
+                position: [0, 0],
+                width: 200,
+                height: 60,
+                scale: 1,
+                props: {
+                    rewardText: 'Reward',
+                    rewardValue: '100',
+                    iconColor: '#FFD700',
+                },
+            },
+        ],
+    },
+    {
+        name: 'LiveTitle',
+        component: LiveTitle,
+        defaultLayers: [
+            {
+                type: 'component',
+                name: 'LiveTitle',
+                position: [0, 0],
+                width: 300,
+                height: 80,
+                scale: 1,
+                props: {
+                    title: 'Live Stream Title',
+                    subtitle: 'Watch and win rewards!',
+                },
+            },
+        ],
+    },
+    {
+        name: 'Introduction',
+        component: Introduction,
+        defaultLayers: [
+            {
+                type: 'component',
+                name: 'Introduction',
+                position: [0, 0],
+                width: 400,
+                height: 300,
+                scale: 1,
+                props: {
+                    title: 'Our Services',
+                    items: [
+                        {
+                            icon: '🎮',
+                            title: 'Gaming',
+                            description: 'Best gaming experience',
+                        },
+                        {
+                            icon: '🎵',
+                            title: 'Music',
+                            description: 'Stream unlimited music',
+                        },
+                        {
+                            icon: '📺',
+                            title: 'Video',
+                            description: 'Watch HD videos',
+                        },
+                    ],
+                },
+            },
+        ],
+    },
+];
 
 export default function TestLivePage() {
-    const [w, setW] = useState('500');
-    const [h, setH] = useState('644');
-    const [scale, setScale] = useState('2');
-    const [debug, setDebug] = useState(false);
+    // 从 localStorage 恢复状态
+    const [selectedComponent, setSelectedComponent] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('test-live-selected-component');
+            return saved ? parseInt(saved) : 0;
+        }
+        return 0;
+    });
 
-    const [layers, setLayers] = useState(`[
-  {
-    type: 'component',
-    name: 'DailyRewards',
-    position: [0, 0],
-    scale: 2,
-    props: {
-      title: 'Rewards for today',
-      items: [
-        { name: 'Item name', color: '#10DCA9' },
-        { name: 'Item name', color: '#10DCA9' },
-        { name: 'Item name', color: '#10DCA9' },
-        { name: 'Item name', color: '#10DCA9' }
-      ]
-    }
-  }
-]`);
+    const currentTest = COMPONENT_TESTS[selectedComponent];
+
+    const [w, setW] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('test-live-width');
+            return saved || CANVAS_WIDTH.toString();
+        }
+        return CANVAS_WIDTH.toString();
+    });
+
+    const [h, setH] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('test-live-height');
+            return saved || CANVAS_HEIGHT.toString();
+        }
+        return CANVAS_HEIGHT.toString();
+    });
+
+    const [scale, setScale] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('test-live-scale');
+            return saved || '2';
+        }
+        return '2';
+    });
+
+    const [debug, setDebug] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('test-live-debug');
+            return saved === 'true';
+        }
+        return false;
+    });
+
+    const [layersConfig, setLayersConfig] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('test-live-layers-config');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch {
+                    return currentTest.defaultLayers;
+                }
+            }
+        }
+        return currentTest.defaultLayers;
+    });
 
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    
+    // 用于编辑的 JSON5 文本（独立状态）
+    const [layersText, setLayersText] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('test-live-layers-config');
+            if (saved) {
+                try {
+                    return JSON5.stringify(JSON.parse(saved), null, 2);
+                } catch {
+                    return JSON5.stringify(currentTest.defaultLayers, null, 2);
+                }
+            }
+        }
+        return JSON5.stringify(currentTest.defaultLayers, null, 2);
+    });
+
+    // 保存状态到 localStorage
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('test-live-selected-component', selectedComponent.toString());
+        }
+    }, [selectedComponent]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('test-live-width', w);
+        }
+    }, [w]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('test-live-height', h);
+        }
+    }, [h]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('test-live-scale', scale);
+        }
+    }, [scale]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('test-live-debug', debug.toString());
+        }
+    }, [debug]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('test-live-layers-config', JSON.stringify(layersConfig));
+        }
+    }, [layersConfig]);
+
+    // 切换组件时更新默认值
+    useEffect(() => {
+        const test = COMPONENT_TESTS[selectedComponent];
+        setLayersConfig(test.defaultLayers);
+        setLayersText(JSON5.stringify(test.defaultLayers, null, 2));
+    }, [selectedComponent]);
 
     const generatePreview = useCallback(async () => {
         setIsLoading(true);
@@ -38,24 +308,12 @@ export default function TestLivePage() {
         setPreviewImage(null);
 
         try {
-            // 解析 layers 并注入组件的 width/height
-            const parsedLayers = JSON5.parse(layers);
-            const updatedLayers = parsedLayers.map((layer: any) => {
-                if (layer.type === 'component') {
-                    return {
-                        width: parseInt(w),
-                        height: parseInt(h),
-                        ...layer,
-                    };
-                }
-                return layer;
-            });
-
-            // 画布大小等于组件大小
+            // 直接使用 layersConfig，不注入 w/h
+            // w/h 只控制画布大小，组件尺寸由 layer 配置中的 width/height 决定
             const params = new URLSearchParams();
             params.append('w', w);
             params.append('h', h);
-            params.append('layers', JSON.stringify(updatedLayers));
+            params.append('layers', JSON.stringify(layersConfig));
             if (scale) params.append('scale', scale);
             if (debug) params.append('debug', 'true');
 
@@ -74,35 +332,40 @@ export default function TestLivePage() {
         } finally {
             setIsLoading(false);
         }
-    }, [w, h, layers, scale, debug]);
+    }, [w, h, layersConfig, scale, debug]);
 
     useEffect(() => {
         const handler = setTimeout(() => {
-            if (w && h && layers) {
+            if (w && h && layersConfig) {
                 try {
-                    JSON5.parse(layers);
+                    // 验证 layersConfig 是否有效
+                    JSON.stringify(layersConfig);
                     generatePreview();
-                } catch (error) {
-                    setError('Invalid JSON format.');
+                } catch (err: any) {
+                    setError('Invalid configuration: ' + err.message);
                 }
             }
         }, 500);
 
         return () => clearTimeout(handler);
-    }, [w, h, layers, scale, debug, generatePreview]);
+    }, [w, h, layersConfig, scale, debug, generatePreview]);
 
-    // 解析 layers 获取组件 props
-    const componentProps = (() => {
+    // 获取组件 props（直接从配置对象获取）
+    const componentProps = layersConfig[0]?.props || {};
+
+    const handleLayersChange = (text: string) => {
+        setLayersText(text);
         try {
-            const parsedLayers = JSON5.parse(layers);
-            const componentLayer = parsedLayers.find(
-                (layer: any) => layer.type === 'component',
-            );
-            return componentLayer?.props || {};
-        } catch {
-            return {};
+            const parsed = JSON5.parse(text);
+            setLayersConfig(parsed);
+            setError(null);
+        } catch (err: any) {
+            // 只在用户停止输入后才显示错误
+            // 这里不立即设置错误，让 useEffect 中的延迟处理
         }
-    })();
+    };
+
+    const CurrentComponent = currentTest.component as any;
 
     return (
         <div
@@ -127,9 +390,29 @@ export default function TestLivePage() {
                     gap: '24px',
                 }}
             >
-                <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold' }}>
-                    本日奖励组件测试
-                </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold' }}>
+                        组件测试
+                    </h1>
+                    <select
+                        value={selectedComponent}
+                        onChange={(e) => setSelectedComponent(Number(e.target.value))}
+                        style={{
+                            padding: '8px 12px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            backgroundColor: '#fff',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {COMPONENT_TESTS.map((test, index) => (
+                            <option key={test.name} value={index}>
+                                {test.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
 
                 <div
                     style={{
@@ -243,8 +526,8 @@ export default function TestLivePage() {
                         </h3>
                         <textarea
                             rows={30}
-                            value={layers}
-                            onChange={(e) => setLayers(e.target.value)}
+                            value={layersText}
+                            onChange={(e) => handleLayersChange(e.target.value)}
                             style={{
                                 width: '100%',
                                 padding: '8px 12px',
@@ -348,19 +631,7 @@ export default function TestLivePage() {
                             }}
                         >
                             <div>
-                                <DailyRewards
-                                    title={componentProps.title || 'Rewards for today'}
-                                    items={
-                                        componentProps.items || [
-                                            { name: 'Item name', color: '#10DCA9' },
-                                            { name: 'Item name', color: '#10DCA9' },
-                                            { name: 'Item name', color: '#10DCA9' },
-                                            { name: 'Item name', color: '#10DCA9' },
-                                        ]
-                                    }
-                                    backgroundColor={componentProps.backgroundColor}
-                                    cardBackgroundColor={componentProps.cardBackgroundColor}
-                                />
+                                <CurrentComponent {...componentProps} />
                             </div>
                         </div>
                     </div>

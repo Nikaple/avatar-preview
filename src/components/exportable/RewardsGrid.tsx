@@ -1,6 +1,6 @@
 import React from 'react';
 
-export interface DailyRewardsProps {
+export interface RewardsGridProps {
     /** 标题文字 */
     title?: string;
     /** 奖励项目列表 */
@@ -15,10 +15,9 @@ export interface DailyRewardsProps {
 }
 
 /**
- * 本日奖励组件
- * 用于展示每日奖励物品
+ * 奖励网格组件
  */
-export default function DailyRewards({
+export default function RewardsGrid({
     title = 'Rewards for today',
     items = [
         { name: 'Item name', color: '#10DCA9' },
@@ -28,7 +27,7 @@ export default function DailyRewards({
     ],
     backgroundColor = '#313131',
     cardBackgroundColor = '#515151',
-}: DailyRewardsProps) {
+}: RewardsGridProps) {
     return (
         <div
             style={{
