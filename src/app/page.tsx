@@ -134,20 +134,34 @@ export default function Home() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <h1 className="text-2xl font-bold text-gray-900">Avatar preview</h1>
-            <a
-              href="https://github.com/Nikaple/avatar-preview"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-600 hover:text-gray-900"
-            >
-              <Image
-                src="/github.svg"
-                alt="GitHub"
-                width={24}
-                height={24}
-                className="dark:invert"
-              />
-            </a>
+            <div className="flex items-center gap-4">
+              <a
+                href="/fonts"
+                className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1 rounded hover:bg-gray-100"
+              >
+                字体管理
+              </a>
+              <a
+                href="/test-fonts"
+                className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1 rounded hover:bg-gray-100"
+              >
+                字体测试
+              </a>
+              <a
+                href="https://github.com/Nikaple/avatar-preview"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <Image
+                  src="/github.svg"
+                  alt="GitHub"
+                  width={24}
+                  height={24}
+                  className="dark:invert"
+                />
+              </a>
+            </div>
           </div>
         </div>
       </header>
