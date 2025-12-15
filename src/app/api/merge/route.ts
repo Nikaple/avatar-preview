@@ -116,6 +116,25 @@ export async function GET(request: NextRequest) {
       : undefined;
     const debug = searchParams.has('debug');
 
+    // 解析 background 参数（支持 JSON5）
+    let background: any = undefined;
+    const backgroundParam = searchParams.get('background');
+    if (backgroundParam && backgroundParam.trim() !== '') {
+      try {
+        background = JSON5.parse(backgroundParam);
+        console.log(
+          '[API] Parsed background:',
+          JSON.stringify(background, null, 2),
+        );
+      } catch (error) {
+        console.error('Failed to parse background parameter:', error);
+        return NextResponse.json(
+          { error: 'Invalid JSON5 format in background parameter' },
+          { status: 400 },
+        );
+      }
+    }
+
     // 解析 layers 或 images 参数（支持 JSON5）
     let layers: Layer[] | undefined;
     let images: Layer[] | undefined;
@@ -127,18 +146,20 @@ export async function GET(request: NextRequest) {
       if (layersParam && layersParam.trim() !== '') {
         layers = JSON5.parse(layersParam);
         console.log('[API] Parsed layers:', JSON.stringify(layers, null, 2));
-        
+
         // 如果有全局 scale 参数，应用到所有没有 scale 的组件图层
         if (scale !== undefined && layers) {
           layers = layers.map((layer) => {
             if (layer.type === 'component' && layer.scale === undefined) {
-              console.log(`[API] Applying global scale ${scale} to component ${layer.name}`);
+              console.log(
+                `[API] Applying global scale ${scale} to component ${layer.name}`,
+              );
               return { ...layer, scale };
             }
             return layer;
           });
         }
-        
+
         console.log('[API] Final layers:', JSON.stringify(layers, null, 2));
       }
     } catch (error) {
@@ -169,6 +190,7 @@ export async function GET(request: NextRequest) {
       images,
       size,
       debug,
+      background,
     };
 
     // 验证配置

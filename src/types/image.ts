@@ -121,6 +121,16 @@ export interface IComponent extends BaseLayer {
 export type Layer = IImage | IText | IComponent;
 
 // ============================================
+// 背景配置
+// ============================================
+
+export type BackgroundConfig =
+  | { type: 'solid'; color: string } // 纯色背景
+  | { type: 'gradient'; gradient: string } // CSS 渐变
+  | { type: 'checkerboard'; size?: number; color1?: string; color2?: string } // 棋盘格
+  | { type: 'image'; url: string; fit?: 'cover' | 'contain' | 'fill' }; // 自定义图片
+
+// ============================================
 // 合并配置
 // ============================================
 
@@ -142,6 +152,9 @@ export interface MergeConfig {
 
   /** 调试模式 */
   debug?: boolean;
+
+  /** 背景配置 */
+  background?: BackgroundConfig;
 }
 
 // ============================================

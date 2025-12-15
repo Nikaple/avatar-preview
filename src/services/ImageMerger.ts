@@ -84,10 +84,9 @@ export class ImageMerger {
         await Promise.all(
           layers.map(async (layer, index) => {
             try {
-              return await withCache(
-                `layer-${index}-${JSON.stringify(layer)}`,
-                () => this.processLayer(layer),
-              );
+              // 将 debug 状态加入缓存 key，确保 debug 模式下重新渲染
+              const cacheKey = `layer-${index}-${JSON.stringify(layer)}-debug:${this.config.debug || false}`;
+              return await withCache(cacheKey, () => this.processLayer(layer));
             } catch (error) {
               console.error(`Failed to process layer ${index}:`, error);
               return null;
@@ -96,21 +95,11 @@ export class ImageMerger {
         )
       ).filter(Boolean); // 过滤掉为 null 的项
 
-      // 合并所有图层
-      let result = await sharp({
-        create: {
-          width: Math.max(
-            this.config.w,
-            ...layerOperations.map((op) => op?.width || 0),
-          ),
-          height: Math.max(
-            this.config.h,
-            ...layerOperations.map((op) => op?.height || 0),
-          ),
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        },
-      })
+      // 创建背景
+      const backgroundBuffer = await this.createBackground();
+
+      // 合并所有图层到背景上
+      let result = await sharp(backgroundBuffer)
         .composite(layerOperations as any)
         .png()
         .toBuffer();
@@ -159,6 +148,262 @@ export class ImageMerger {
   }
 
   /**
+   * 创建背景
+   */
+  private async createBackground(): Promise<Buffer> {
+    const width = this.config.w;
+    const height = this.config.h;
+    const bg = this.config.background;
+
+    // 如果没有配置背景，返回透明背景
+    if (!bg) {
+      return sharp({
+        create: {
+          width,
+          height,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        },
+      })
+        .png()
+        .toBuffer();
+    }
+
+    switch (bg.type) {
+      case 'solid':
+        return this.createSolidBackground(width, height, bg.color);
+
+      case 'gradient':
+        return this.createGradientBackground(width, height, bg.gradient);
+
+      case 'checkerboard':
+        return this.createCheckerboardBackground(
+          width,
+          height,
+          bg.size,
+          bg.color1,
+          bg.color2,
+        );
+
+      case 'image':
+        return this.createImageBackground(width, height, bg.url, bg.fit);
+
+      default:
+        console.warn(`Unknown background type: ${(bg as any).type}`);
+        return sharp({
+          create: {
+            width,
+            height,
+            channels: 4,
+            background: { r: 0, g: 0, b: 0, alpha: 0 },
+          },
+        })
+          .png()
+          .toBuffer();
+    }
+  }
+
+  /**
+   * 创建纯色背景
+   */
+  private async createSolidBackground(
+    width: number,
+    height: number,
+    color: string,
+  ): Promise<Buffer> {
+    // 解析颜色
+    const rgb = this.parseColor(color);
+
+    return sharp({
+      create: {
+        width,
+        height,
+        channels: 4,
+        background: rgb,
+      },
+    })
+      .png()
+      .toBuffer();
+  }
+
+  /**
+   * 创建渐变背景
+   */
+  private async createGradientBackground(
+    width: number,
+    height: number,
+    gradient: string,
+  ): Promise<Buffer> {
+    // 使用 SVG 生成渐变
+    const svg = `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            ${this.parseGradient(gradient)}
+          </linearGradient>
+        </defs>
+        <rect width="${width}" height="${height}" fill="url(#grad)" />
+      </svg>
+    `;
+
+    return sharp(Buffer.from(svg)).png().toBuffer();
+  }
+
+  /**
+   * 创建棋盘格背景
+   */
+  private async createCheckerboardBackground(
+    width: number,
+    height: number,
+    size: number = 20,
+    color1: string = '#FFFFFF',
+    color2: string = '#CCCCCC',
+  ): Promise<Buffer> {
+    const svg = this.generateCheckerboardSVG(
+      width,
+      height,
+      size,
+      color1,
+      color2,
+    );
+    return sharp(Buffer.from(svg)).png().toBuffer();
+  }
+
+  /**
+   * 创建图片背景
+   */
+  private async createImageBackground(
+    width: number,
+    height: number,
+    url: string,
+    fit: 'cover' | 'contain' | 'fill' = 'cover',
+  ): Promise<Buffer> {
+    const imageBuffer = await this.getOriginalImageBuffer(url);
+
+    let resizeOptions: any = { width, height };
+
+    switch (fit) {
+      case 'cover':
+        resizeOptions.fit = 'cover';
+        break;
+      case 'contain':
+        resizeOptions.fit = 'contain';
+        resizeOptions.background = { r: 0, g: 0, b: 0, alpha: 0 };
+        break;
+      case 'fill':
+        resizeOptions.fit = 'fill';
+        break;
+    }
+
+    return sharp(imageBuffer).resize(resizeOptions).png().toBuffer();
+  }
+
+  /**
+   * 解析颜色字符串为 RGB 对象
+   */
+  private parseColor(color: string): {
+    r: number;
+    g: number;
+    b: number;
+    alpha: number;
+  } {
+    // 移除空格
+    color = color.trim();
+
+    // 处理 hex 格式 (#RGB 或 #RRGGBB)
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      let r: number, g: number, b: number;
+
+      if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else if (hex.length === 6) {
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      } else {
+        // 默认黑色
+        return { r: 0, g: 0, b: 0, alpha: 1 };
+      }
+
+      return { r, g, b, alpha: 1 };
+    }
+
+    // 处理 rgb/rgba 格式
+    const rgbMatch = color.match(
+      /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/,
+    );
+    if (rgbMatch) {
+      return {
+        r: parseInt(rgbMatch[1]),
+        g: parseInt(rgbMatch[2]),
+        b: parseInt(rgbMatch[3]),
+        alpha: rgbMatch[4] ? parseFloat(rgbMatch[4]) : 1,
+      };
+    }
+
+    // 默认黑色
+    return { r: 0, g: 0, b: 0, alpha: 1 };
+  }
+
+  /**
+   * 解析 CSS 渐变字符串为 SVG gradient stops
+   */
+  private parseGradient(gradient: string): string {
+    // 简化版本：支持基本的 linear-gradient 格式
+    // 例如: "linear-gradient(to right, #ff0000, #0000ff)"
+    // 或: "#ff0000, #0000ff"
+
+    // 移除 linear-gradient() 包装
+    let colors = gradient
+      .replace(/linear-gradient\([^,]+,\s*/, '')
+      .replace(/\)$/, '');
+
+    // 分割颜色
+    const colorStops = colors.split(',').map((c) => c.trim());
+
+    // 生成 SVG stops
+    return colorStops
+      .map((color, index) => {
+        const offset = (index / (colorStops.length - 1)) * 100;
+        return `<stop offset="${offset}%" stop-color="${color}" />`;
+      })
+      .join('\n');
+  }
+
+  /**
+   * 生成棋盘格 SVG
+   */
+  private generateCheckerboardSVG(
+    width: number,
+    height: number,
+    size: number,
+    color1: string,
+    color2: string,
+  ): string {
+    let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
+
+    const cols = Math.ceil(width / size);
+    const rows = Math.ceil(height / size);
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const isEven = (row + col) % 2 === 0;
+        const color = isEven ? color1 : color2;
+        const x = col * size;
+        const y = row * size;
+
+        svg += `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${color}" />`;
+      }
+    }
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  /**
    * 标准化图层（为没有 type 的图层添加默认值）
    * 规则：没有 type 字段就默认为 'image'
    */
@@ -193,8 +438,10 @@ export class ImageMerger {
    */
   private async processComponent(component: IComponent) {
     try {
-      console.log(`[ImageMerger] Processing component with scale: ${component.scale}`);
-      
+      console.log(
+        `[ImageMerger] Processing component with scale: ${component.scale}`,
+      );
+
       // 1. 渲染组件为 PNG Buffer
       const componentBuffer = await this.componentRenderer.render(
         component.name,

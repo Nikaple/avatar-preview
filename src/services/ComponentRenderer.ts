@@ -67,7 +67,9 @@ export class ComponentRenderer {
     const height = options.height || componentConfig.defaultHeight || 200;
     const scale = options.scale !== undefined ? options.scale : 1;
 
-    console.log(`[ComponentRenderer] Rendering ${componentName} with width=${width}, height=${height}, scale=${scale}`);
+    console.log(
+      `[ComponentRenderer] Rendering ${componentName} with width=${width}, height=${height}, scale=${scale}`,
+    );
 
     // 4. 加载字体
     const fonts = await this.loadFonts();
@@ -99,7 +101,9 @@ export class ComponentRenderer {
     const renderWidth = Math.round(width * scale);
     const renderHeight = Math.round(height * scale);
 
-    console.log(`[ComponentRenderer] Satori container size: ${renderWidth}x${renderHeight}`);
+    console.log(
+      `[ComponentRenderer] Satori container size: ${renderWidth}x${renderHeight}`,
+    );
 
     try {
       // 7. 使用 Satori 渲染为 SVG（使用缩放后的尺寸作为容器）
